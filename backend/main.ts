@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { kv } from './db.ts'
 import { authRoutes } from './routes/auth.ts'
+import { getAuthenticatedUser } from './services/session.ts'
 
 const app = new Hono()
 
@@ -13,6 +14,26 @@ app.use('/api/*', cors({
 }))
 
 app.route('/api/auth', authRoutes)
+
+app.use('/api/restaurants', async (c, next) => {
+  const user = await getAuthenticatedUser(c)
+
+  if (!user) {
+    return c.json({ error: 'Nicht angemeldet' }, 401)
+  }
+
+  await next()
+})
+
+app.use('/api/restaurants/*', async (c, next) => {
+  const user = await getAuthenticatedUser(c)
+
+  if (!user) {
+    return c.json({ error: 'Nicht angemeldet' }, 401)
+  }
+
+  await next()
+})
 
 // DATENTYPEN
 
