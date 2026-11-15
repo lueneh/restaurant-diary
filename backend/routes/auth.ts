@@ -5,6 +5,12 @@ import { hashPassword } from '../services/auth.ts'
 import { getCookie, setCookie, deleteCookie } from 'hono/cookie'
 import { verifyPassword } from '../services/auth.ts'
 
+import {
+  SESSION_COOKIE,
+  hashSessionToken,
+  getAuthenticatedUser
+} from '../services/session.ts'
+
 import type {
   User,
   PublicUser
@@ -12,7 +18,6 @@ import type {
 
 export const authRoutes = new Hono()
 
-const SESSION_COOKIE = 'restaurant_session'
 const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000
 
 type Session = {
@@ -25,16 +30,6 @@ function createSessionToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(32))
 
   return Array.from(bytes)
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
-
-// Sitzungstoken vor dem Speichern hashen
-async function hashSessionToken(token: string): Promise<string> {
-  const data = new TextEncoder().encode(token)
-  const digest = await crypto.subtle.digest('SHA-256', data)
-
-  return Array.from(new Uint8Array(digest))
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
 }
@@ -295,34 +290,10 @@ authRoutes.post('/login', async (c) => {
 // ========================================
 
 authRoutes.get('/me', async (c) => {
-  const token = getCookie(c, SESSION_COOKIE)
-
-  if (!token) {
-    return c.json({ error: 'Nicht angemeldet' }, 401)
-  }
-
-  const tokenHash = await hashSessionToken(token)
-
-  const sessionEntry = await kv.get<Session>([
-    'sessions',
-    tokenHash
-  ])
-
-  const session = sessionEntry.value
-
-  if (!session || session.expiresAt <= Date.now()) {
-    return c.json({ error: 'Sitzung ungültig' }, 401)
-  }
-
-  const userEntry = await kv.get<User>([
-    'users',
-    session.userId
-  ])
-
-  const user = userEntry.value
+  const user = await getAuthenticatedUser(c)
 
   if (!user) {
-    return c.json({ error: 'Benutzer nicht gefunden' }, 401)
+    return c.json({ error: 'Nicht angemeldet' }, 401)
   }
 
   const publicUser: PublicUser = {
