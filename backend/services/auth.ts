@@ -9,6 +9,17 @@ function toHex(bytes: Uint8Array): string {
     .join('')
 }
 
+// Hexadezimale Zeichenfolge in Bytes umwandeln
+function fromHex(hex: string): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(hex.length / 2)
+
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
+  }
+
+  return bytes
+}
+
 // Passwort sicher hashen
 export async function hashPassword(
   password: string
@@ -17,11 +28,9 @@ export async function hashPassword(
     new Uint8Array(SALT_LENGTH)
   )
 
-  const encoder = new TextEncoder()
-
   const key = await crypto.subtle.importKey(
     'raw',
-    encoder.encode(password),
+    new TextEncoder().encode(password),
     'PBKDF2',
     false,
     ['deriveBits']
@@ -43,7 +52,7 @@ export async function hashPassword(
   return `pbkdf2_sha256$${ITERATIONS}$${toHex(salt)}$${toHex(hash)}`
 }
 
-
+// Passwort überprüfen
 export async function verifyPassword(
   password: string,
   storedHash: string
@@ -60,21 +69,11 @@ export async function verifyPassword(
 
   if (
     !Number.isSafeInteger(iterations) ||
-    iterations !== 600_000 ||
+    iterations !== ITERATIONS ||
     !/^[0-9a-f]{32}$/.test(saltHex) ||
     !/^[0-9a-f]{64}$/.test(hashHex)
   ) {
     return false
-  }
-
-  function fromHex(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2)
-
-    for (let i = 0; i < bytes.length; i++) {
-      bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16)
-    }
-
-    return bytes
   }
 
   const salt = fromHex(saltHex)

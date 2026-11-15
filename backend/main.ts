@@ -6,6 +6,7 @@ import { getAuthenticatedUser } from './services/session.ts'
 
 const app = new Hono()
 
+// CORS
 app.use('/api/*', cors({
   origin: 'http://localhost:5173',
   credentials: true,
@@ -13,9 +14,17 @@ app.use('/api/*', cors({
   allowHeaders: ['Content-Type']
 }))
 
+// AUTHENTIFIZIERUNG
 app.route('/api/auth', authRoutes)
 
-app.use('/api/restaurants', async (c, next) => {
+// Alle Restaurant- und Besuchsrouten schützen
+app.use('/api/restaurants', requireAuth)
+app.use('/api/restaurants/*', requireAuth)
+
+async function requireAuth(
+  c: Parameters<typeof getAuthenticatedUser>[0],
+  next: () => Promise<void>
+) {
   const user = await getAuthenticatedUser(c)
 
   if (!user) {
@@ -23,17 +32,7 @@ app.use('/api/restaurants', async (c, next) => {
   }
 
   await next()
-})
-
-app.use('/api/restaurants/*', async (c, next) => {
-  const user = await getAuthenticatedUser(c)
-
-  if (!user) {
-    return c.json({ error: 'Nicht angemeldet' }, 401)
-  }
-
-  await next()
-})
+}
 
 // DATENTYPEN
 
@@ -186,10 +185,13 @@ app.get('/api/health', (c) => {
 // RESTAURANTS ABRUFEN
 
 app.get('/api/restaurants', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const restaurants: Restaurant[] = []
 
   for await (
-    const entry of kv.list<Restaurant>({ prefix: ['restaurants'] })
+    const entry of kv.list<Restaurant>({
+      prefix: ['restaurants', user.id]
+    })
   ) {
     restaurants.push(entry.value)
   }
@@ -200,6 +202,7 @@ app.get('/api/restaurants', async (c) => {
 // RESTAURANT ERSTELLEN
 
 app.post('/api/restaurants', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const data = validateRestaurant(await readJson(c))
 
   if (!data) {
@@ -211,7 +214,10 @@ app.post('/api/restaurants', async (c) => {
     ...data
   }
 
-  await kv.set(['restaurants', restaurant.id], restaurant)
+  await kv.set(
+    ['restaurants', user.id, restaurant.id],
+    restaurant
+  )
 
   return c.json(restaurant, 201)
 })
@@ -219,9 +225,11 @@ app.post('/api/restaurants', async (c) => {
 // RESTAURANT BEARBEITEN
 
 app.put('/api/restaurants/:id', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const id = c.req.param('id')
 
-  const existing = await kv.get<Restaurant>(['restaurants', id])
+  const key: Deno.KvKey = ['restaurants', user.id, id]
+  const existing = await kv.get<Restaurant>(key)
 
   if (!existing.value) {
     return c.json({ error: 'Restaurant nicht gefunden' }, 404)
@@ -238,7 +246,7 @@ app.put('/api/restaurants/:id', async (c) => {
     ...data
   }
 
-  await kv.set(['restaurants', id], updatedRestaurant)
+  await kv.set(key, updatedRestaurant)
 
   return c.json(updatedRestaurant)
 })
@@ -246,22 +254,26 @@ app.put('/api/restaurants/:id', async (c) => {
 // RESTAURANT LÖSCHEN
 
 app.delete('/api/restaurants/:id', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const id = c.req.param('id')
 
-  const existing = await kv.get<Restaurant>(['restaurants', id])
+  const key: Deno.KvKey = ['restaurants', user.id, id]
+  const existing = await kv.get<Restaurant>(key)
 
   if (!existing.value) {
     return c.json({ error: 'Restaurant nicht gefunden' }, 404)
   }
 
-  // Auch alle zugehörigen Besuche entfernen
+  // Alle zugehörigen Besuche löschen
   for await (
-    const entry of kv.list({ prefix: ['visits', id] })
+    const entry of kv.list({
+      prefix: ['visits', user.id, id]
+    })
   ) {
     await kv.delete(entry.key)
   }
 
-  await kv.delete(['restaurants', id])
+  await kv.delete(key)
 
   return c.json({ message: 'Restaurant gelöscht' })
 })
@@ -269,10 +281,12 @@ app.delete('/api/restaurants/:id', async (c) => {
 // BESUCHE ABRUFEN
 
 app.get('/api/restaurants/:id/visits', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const restaurantId = c.req.param('id')
 
   const restaurant = await kv.get<Restaurant>([
     'restaurants',
+    user.id,
     restaurantId
   ])
 
@@ -284,7 +298,7 @@ app.get('/api/restaurants/:id/visits', async (c) => {
 
   for await (
     const entry of kv.list<Visit>({
-      prefix: ['visits', restaurantId]
+      prefix: ['visits', user.id, restaurantId]
     })
   ) {
     visits.push(entry.value)
@@ -298,10 +312,12 @@ app.get('/api/restaurants/:id/visits', async (c) => {
 // BESUCH ERSTELLEN
 
 app.post('/api/restaurants/:id/visits', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const restaurantId = c.req.param('id')
 
   const restaurant = await kv.get<Restaurant>([
     'restaurants',
+    user.id,
     restaurantId
   ])
 
@@ -322,18 +338,38 @@ app.post('/api/restaurants/:id/visits', async (c) => {
     rating: calculateRating(data)
   }
 
-  await kv.set(['visits', restaurantId, visit.id], visit)
+  await kv.set(
+    ['visits', user.id, restaurantId, visit.id],
+    visit
+  )
 
   return c.json(visit, 201)
 })
 
-// NEU: BESUCH BEARBEITEN
+// BESUCH BEARBEITEN
 
 app.put('/api/restaurants/:id/visits/:visitId', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const restaurantId = c.req.param('id')
   const visitId = c.req.param('visitId')
 
-  const key: Deno.KvKey = ['visits', restaurantId, visitId]
+  // Erst prüfen, ob das Restaurant dem Benutzer gehört
+  const restaurant = await kv.get<Restaurant>([
+    'restaurants',
+    user.id,
+    restaurantId
+  ])
+
+  if (!restaurant.value) {
+    return c.json({ error: 'Restaurant nicht gefunden' }, 404)
+  }
+
+  const key: Deno.KvKey = [
+    'visits',
+    user.id,
+    restaurantId,
+    visitId
+  ]
 
   const existing = await kv.get<Visit>(key)
 
@@ -359,13 +395,30 @@ app.put('/api/restaurants/:id/visits/:visitId', async (c) => {
   return c.json(updatedVisit)
 })
 
-// NEU: BESUCH LÖSCHEN
+// BESUCH LÖSCHEN
 
 app.delete('/api/restaurants/:id/visits/:visitId', async (c) => {
+  const user = (await getAuthenticatedUser(c))!
   const restaurantId = c.req.param('id')
   const visitId = c.req.param('visitId')
 
-  const key: Deno.KvKey = ['visits', restaurantId, visitId]
+  // Erst prüfen, ob das Restaurant dem Benutzer gehört
+  const restaurant = await kv.get<Restaurant>([
+    'restaurants',
+    user.id,
+    restaurantId
+  ])
+
+  if (!restaurant.value) {
+    return c.json({ error: 'Restaurant nicht gefunden' }, 404)
+  }
+
+  const key: Deno.KvKey = [
+    'visits',
+    user.id,
+    restaurantId,
+    visitId
+  ]
 
   const existing = await kv.get<Visit>(key)
 
