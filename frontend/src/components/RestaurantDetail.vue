@@ -79,6 +79,10 @@ watch(
           ·
           {{ restaurant.cuisine }}
         </p>
+
+        <p v-if="restaurant.address" class="restaurant-address">
+         📍 {{ restaurant.address }}
+        </p>
       </div>
 
       <button
@@ -194,6 +198,11 @@ watch(
 .visits-header p {
   color: var(--color-muted);
   margin: 0;
+}
+
+.restaurant-address {
+  margin-top: 8px !important;
+  font-size: 14px;
 }
 
 .rating-summary {

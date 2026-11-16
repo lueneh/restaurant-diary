@@ -31,6 +31,10 @@ const emit = defineEmits<{
       📍 {{ restaurant.location }}
     </p>
 
+    <p v-if="restaurant.address" class="location-text">
+      {{ restaurant.address }}
+    </p>
+
     <div class="rating-row">
       <template v-if="averageRating !== null">
         <span class="rating-star">★</span>

@@ -40,6 +40,7 @@ type Restaurant = {
   id: string
   name: string
   location: string
+  address?: string
   cuisine: string
 }
 
@@ -101,6 +102,7 @@ function isValidDate(value: unknown): value is string {
 function validateRestaurant(body: unknown): {
   name: string
   location: string
+  address: string
   cuisine: string
 } | null {
   if (
@@ -119,7 +121,11 @@ function validateRestaurant(body: unknown): {
     typeof data.location !== 'string' ||
     !data.location.trim() ||
     typeof data.cuisine !== 'string' ||
-    !data.cuisine.trim()
+    !data.cuisine.trim() ||
+    (
+    data.address !== undefined &&
+    typeof data.address !== 'string'
+    )
   ) {
     return null
   }
@@ -127,6 +133,9 @@ function validateRestaurant(body: unknown): {
   return {
     name: data.name.trim(),
     location: data.location.trim(),
+    address: typeof data.address === 'string'
+    ? data.address.trim()
+    : '',
     cuisine: data.cuisine.trim()
   }
 }

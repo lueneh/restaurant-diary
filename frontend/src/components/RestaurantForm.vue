@@ -19,6 +19,7 @@ const emit = defineEmits<{
 // Formularfelder
 const name = ref('')
 const location = ref('')
+const address = ref('')
 const cuisine = ref('')
 
 // Formular aktualisieren, wenn ein Restaurant
@@ -28,6 +29,7 @@ watch(
   (restaurant) => {
     name.value = restaurant?.name ?? ''
     location.value = restaurant?.location ?? ''
+    address.value = restaurant?.address ?? ''
     cuisine.value = restaurant?.cuisine ?? ''
   },
   { immediate: true }
@@ -38,6 +40,7 @@ function submitForm() {
   const data: RestaurantInput = {
     name: name.value.trim(),
     location: location.value.trim(),
+    address: address.value.trim(),
     cuisine: cuisine.value.trim()
   }
 
@@ -95,6 +98,14 @@ function cancelEditing() {
           v-model="location"
           placeholder="z. B. Mosbach"
           required
+        >
+      </label>
+
+      <label>
+        Adresse (optional)
+        <input
+          v-model="address"
+          placeholder="z. B. Hauptstraße 12"
         >
       </label>
 

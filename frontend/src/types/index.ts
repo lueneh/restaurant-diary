@@ -1,4 +1,3 @@
-
 export type Restaurant = {
   id: string
   name: string
@@ -21,6 +20,7 @@ export type Visit = {
 export type RestaurantInput = {
   name: string
   location: string
+  address?: string
   cuisine: string
 }
 
