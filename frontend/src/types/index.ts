@@ -2,6 +2,7 @@ export type Restaurant = {
   id: string
   name: string
   location: string
+  address?: string
   cuisine: string
 }
 
