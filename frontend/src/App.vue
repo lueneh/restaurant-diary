@@ -12,16 +12,15 @@ import RestaurantCard from './components/RestaurantCard.vue'
 import RestaurantForm from './components/RestaurantForm.vue'
 import RestaurantDetail from './components/RestaurantDetail.vue'
 import RestaurantFilters from './components/RestaurantFilters.vue'
+import LoginForm from './components/LoginForm.vue'
+import RegisterForm from './components/RegisterForm.vue'
+import GroupsView from './components/GroupsView.vue'
 
 import { useRestaurants } from './composables/useRestaurants'
 import { useVisits } from './composables/useVisits'
 
-import { getVisits } from './services/api'
-
-import LoginForm from './components/LoginForm.vue'
-import RegisterForm from './components/RegisterForm.vue'
-
 import {
+  getVisits,
   login,
   register,
   logout,
@@ -40,6 +39,9 @@ const authLoading = ref(false)
 const authError = ref('')
 const authMode = ref<'login' | 'register'>('login')
 
+// Navigation
+const activePage = ref<'restaurants' | 'groups'>('restaurants')
+
 function switchAuthMode(mode: 'login' | 'register') {
   authMode.value = mode
   authError.value = ''
@@ -52,6 +54,7 @@ async function handleLogin(username: string, password: string) {
   try {
     const response = await login(username, password)
     currentUser.value = response.user
+    activePage.value = 'restaurants'
 
     await loadRestaurants()
     await loadRestaurantRatings()
@@ -70,8 +73,6 @@ async function handleRegister(username: string, password: string) {
 
   try {
     await register(username, password)
-
-    // Nach der Registrierung direkt anmelden
     await handleLogin(username, password)
   } catch (err) {
     authError.value = err instanceof Error
@@ -91,6 +92,7 @@ async function handleLogout() {
 
     currentUser.value = null
     authMode.value = 'login'
+    activePage.value = 'restaurants'
 
     closeRestaurant()
     resetRestaurantForm()
@@ -162,6 +164,7 @@ async function saveRestaurant(data: RestaurantInput) {
 }
 
 function editRestaurant(restaurant: Restaurant) {
+  activePage.value = 'restaurants'
   editingId.value = restaurant.id
   error.value = ''
 
@@ -184,7 +187,7 @@ async function deleteRestaurant(restaurant: Restaurant) {
   if (selectedRestaurant.value?.id === restaurant.id) {
     closeRestaurant()
   }
-  
+
   await loadRestaurantRatings()
 }
 
@@ -196,7 +199,6 @@ const searchQuery = ref('')
 const selectedCuisine = ref('')
 const sortOrder = ref('az')
 
-// Küchenrichtungen aus vorhandenen Restaurants ermitteln
 const availableCuisines = computed(() => {
   const cuisines = restaurants.value
     .map((restaurant) => restaurant.cuisine.trim())
@@ -205,7 +207,6 @@ const availableCuisines = computed(() => {
   return [...new Set(cuisines)]
 })
 
-// Gefilterte und sortierte Restaurantliste
 const filteredRestaurants = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase('de')
 
@@ -236,6 +237,10 @@ const filteredRestaurants = computed(() => {
       : comparison
   })
 })
+
+// ========================================
+// BEWERTUNGSÜBERSICHT
+// ========================================
 
 type RatingSummary = {
   averageRating: number | null
@@ -275,7 +280,10 @@ async function loadRestaurantRatings() {
         visitCount: result.value.visitCount
       }
     } else {
-      console.error('Bewertungen konnten nicht geladen werden.', result.reason)
+      console.error(
+        'Bewertungen konnten nicht geladen werden.',
+        result.reason
+      )
     }
   }
 
@@ -368,7 +376,7 @@ async function saveVisit(data: VisitInput) {
     resetVisitForm()
   }
 
-    await loadRestaurantRatings()
+  await loadRestaurantRatings()
 }
 
 async function deleteVisit(visit: Visit) {
@@ -378,7 +386,7 @@ async function deleteVisit(visit: Visit) {
   const deleted = await removeVisit(visit)
 
   if (deleted) {
-  await loadRestaurantRatings()
+    await loadRestaurantRatings()
   }
 
   if (
@@ -388,6 +396,23 @@ async function deleteVisit(visit: Visit) {
   ) {
     resetVisitForm()
   }
+}
+
+// ========================================
+// NAVIGATION
+// ========================================
+
+function navigateTo(page: 'restaurants' | 'groups') {
+  activePage.value = page
+
+  if (page === 'groups') {
+    closeRestaurant()
+  }
+
+  window.scrollTo({
+    top: 0,
+    behavior: 'smooth'
+  })
 }
 
 // ========================================
@@ -422,9 +447,10 @@ onMounted(async () => {
           Restaurant Diary
         </div>
 
-      <div v-if="currentUser" class="user-menu">
+        <div v-if="currentUser" class="user-menu">
           <span class="topbar-label">
-            Angemeldet als <strong>{{ currentUser.username }}</strong>
+            Angemeldet als
+            <strong>{{ currentUser.username }}</strong>
           </span>
 
           <button
@@ -442,6 +468,37 @@ onMounted(async () => {
         </span>
       </div>
     </header>
+
+    <!-- NAVIGATION -->
+    <nav
+      v-if="currentUser && !authChecking"
+      class="page-navigation"
+      aria-label="Hauptnavigation"
+    >
+      <div class="navigation-inner">
+
+        <button
+          type="button"
+          class="nav-button"
+          :class="{ active: activePage === 'restaurants' }"
+          :aria-current="activePage === 'restaurants' ? 'page' : undefined"
+          @click="navigateTo('restaurants')"
+        >
+          Meine Restaurants
+        </button>
+
+        <button
+          type="button"
+          class="nav-button"
+          :class="{ active: activePage === 'groups' }"
+          :aria-current="activePage === 'groups' ? 'page' : undefined"
+          @click="navigateTo('groups')"
+        >
+          Meine Gruppen
+        </button>
+
+      </div>
+    </nav>
 
     <main class="container">
 
@@ -487,131 +544,143 @@ onMounted(async () => {
         </div>
       </section>
 
-      <!-- BESTEHENDE RESTAURANT-APP -->
+      <!-- ANGEMELDETE ANWENDUNG -->
       <template v-else>
 
-      <!-- HERO -->
-      <section class="hero">
-        <span class="eyebrow">
-          DEIN RESTAURANT-TAGEBUCH
-        </span>
-
-        <h1>
-          Gute Restaurants.<br>
-          <em>Schöne Erinnerungen.</em>
-        </h1>
-
-        <p>
-          Sammle deine Lieblingsrestaurants, halte deine Besuche
-          fest und erinnere dich an die besten Gerichte.
-        </p>
-      </section>
-
-      <!-- RESTAURANTÜBERSICHT -->
-      <div class="content-grid">
-
-        <!-- RESTAURANTFORMULAR -->
-        <RestaurantForm
-          :key="restaurantFormKey"
-          :initial-data="editingRestaurant"
-          :loading="loading"
-          :error="error"
-          @save="saveRestaurant"
-          @cancel="resetRestaurantForm"
+        <!-- GRUPPENANSICHT -->
+        <GroupsView
+          v-if="activePage === 'groups'"
         />
 
-        <!-- RESTAURANTLISTE -->
-        <section class="restaurant-section">
-          <div class="list-heading">
-            <div>
-              <span class="eyebrow">
-                DEINE SAMMLUNG
-              </span>
+        <!-- RESTAURANTANSICHT -->
+        <template v-else>
 
-              <h2>Meine Restaurants</h2>
-            </div>
-
-            <span class="count-badge">
-              {{ restaurants.length }}
-              {{
-                restaurants.length === 1
-                  ? 'Restaurant'
-                  : 'Restaurants'
-              }}
+          <!-- HERO -->
+          <section class="hero">
+            <span class="eyebrow">
+              DEIN RESTAURANT-TAGEBUCH
             </span>
+
+            <h1>
+              Gute Restaurants.<br>
+              <em>Schöne Erinnerungen.</em>
+            </h1>
+
+            <p>
+              Sammle deine Lieblingsrestaurants, halte deine Besuche
+              fest und erinnere dich an die besten Gerichte.
+            </p>
+          </section>
+
+          <!-- RESTAURANTÜBERSICHT -->
+          <div class="content-grid">
+
+            <!-- RESTAURANTFORMULAR -->
+            <RestaurantForm
+              :key="restaurantFormKey"
+              :initial-data="editingRestaurant"
+              :loading="loading"
+              :error="error"
+              @save="saveRestaurant"
+              @cancel="resetRestaurantForm"
+            />
+
+            <!-- RESTAURANTLISTE -->
+            <section class="restaurant-section">
+
+              <div class="list-heading">
+                <div>
+                  <span class="eyebrow">
+                    DEINE SAMMLUNG
+                  </span>
+
+                  <h2>Meine Restaurants</h2>
+                </div>
+
+                <span class="count-badge">
+                  {{ restaurants.length }}
+                  {{
+                    restaurants.length === 1
+                      ? 'Restaurant'
+                      : 'Restaurants'
+                  }}
+                </span>
+              </div>
+
+              <!-- SUCHE, FILTER UND SORTIERUNG -->
+              <RestaurantFilters
+                v-model:search="searchQuery"
+                v-model:cuisine="selectedCuisine"
+                v-model:sort="sortOrder"
+                :cuisines="availableCuisines"
+              />
+
+              <!-- KEINE RESTAURANTS -->
+              <div
+                v-if="restaurants.length === 0"
+                class="empty-state"
+              >
+                <span class="empty-icon">🍽️</span>
+
+                <h3>Noch keine Restaurants</h3>
+
+                <p>
+                  Füge dein erstes Restaurant hinzu.
+                </p>
+              </div>
+
+              <!-- KEINE SUCHERGEBNISSE -->
+              <div
+                v-else-if="filteredRestaurants.length === 0"
+                class="empty-state"
+              >
+                <span class="empty-icon">🔎</span>
+
+                <h3>Keine Restaurants gefunden</h3>
+
+                <p>
+                  Versuche einen anderen Suchbegriff
+                  oder ändere deine Filter.
+                </p>
+              </div>
+
+              <!-- RESTAURANTKARTEN -->
+              <div v-else class="restaurant-grid">
+                <RestaurantCard
+                  v-for="restaurant in filteredRestaurants"
+                  :key="restaurant.id"
+                  :restaurant="restaurant"
+                  :average-rating="restaurantRatings[restaurant.id]?.averageRating ?? null"
+                  :visit-count="restaurantRatings[restaurant.id]?.visitCount ?? 0"
+                  @select="selectRestaurant"
+                  @edit="editRestaurant"
+                  @delete="deleteRestaurant"
+                />
+              </div>
+
+            </section>
           </div>
 
-          <!-- SUCHE, FILTER UND SORTIERUNG -->
-          <RestaurantFilters
-            v-model:search="searchQuery"
-            v-model:cuisine="selectedCuisine"
-            v-model:sort="sortOrder"
-            :cuisines="availableCuisines"
+          <!-- RESTAURANTDETAILANSICHT -->
+          <RestaurantDetail
+            v-if="selectedRestaurant"
+            :restaurant="selectedRestaurant"
+            :visits="visits"
+            :visit-error="visitError"
+            :visit-loading="visitLoading"
+            :editing-visit-id="editingVisitId"
+            :editing-visit="editingVisit"
+            :visit-form-key="visitFormKey"
+            @close="closeRestaurant"
+            @save-visit="saveVisit"
+            @edit-visit="editVisit"
+            @delete-visit="deleteVisit"
+            @cancel-edit="resetVisitForm"
           />
 
-          <!-- KEINE RESTAURANTS VORHANDEN -->
-          <div
-            v-if="restaurants.length === 0"
-            class="empty-state"
-          >
-            <span class="empty-icon">🍽️</span>
-
-            <h3>Noch keine Restaurants</h3>
-
-            <p>
-              Füge dein erstes Restaurant hinzu.
-            </p>
-          </div>
-
-          <!-- KEINE PASSENDEN SUCHERGEBNISSE -->
-          <div
-            v-else-if="filteredRestaurants.length === 0"
-            class="empty-state"
-          >
-            <span class="empty-icon">🔎</span>
-
-            <h3>Keine Restaurants gefunden</h3>
-
-            <p>
-              Versuche einen anderen Suchbegriff
-              oder ändere deine Filter.
-            </p>
-          </div>
-
-          <!-- GEFILTERTE RESTAURANTKARTEN -->
-          <div v-else class="restaurant-grid">
-            <RestaurantCard
-              v-for="restaurant in filteredRestaurants"
-              :key="restaurant.id"
-              :restaurant="restaurant"
-              :average-rating="restaurantRatings[restaurant.id]?.averageRating ?? null"
-              :visit-count="restaurantRatings[restaurant.id]?.visitCount ?? 0"
-              @select="selectRestaurant"
-              @edit="editRestaurant"
-              @delete="deleteRestaurant"
-            />
-          </div>
-        </section>
-      </div>
-
-      <!-- RESTAURANTDETAILANSICHT -->
-      <RestaurantDetail
-        v-if="selectedRestaurant"
-        :restaurant="selectedRestaurant"
-        :visits="visits"
-        :visit-error="visitError"
-        :visit-loading="visitLoading"
-        :editing-visit-id="editingVisitId"
-        :editing-visit="editingVisit"
-        :visit-form-key="visitFormKey"
-        @close="closeRestaurant"
-        @save-visit="saveVisit"
-        @edit-visit="editVisit"
-        @delete-visit="deleteVisit"
-        @cancel-edit="resetVisitForm"
-      />
-
+        </template>
       </template>
+
     </main>
   </div>
 </template>
@@ -656,8 +725,78 @@ onMounted(async () => {
   font-size: 13px;
 }
 
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.logout-button {
+  border: 1px solid var(--color-border);
+  background: transparent;
+  padding: 10px 16px;
+  border-radius: 10px;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background: #e8f0e8;
+}
+
+.logout-button:disabled {
+  opacity: 0.5;
+  cursor: wait;
+}
+
 /* ========================================
-   HERO
+   NAVIGATION
+======================================== */
+
+.page-navigation {
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.navigation-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 10px 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nav-button {
+  border: none;
+  background: transparent;
+  color: #6e7c72;
+  border-radius: 10px;
+  padding: 12px 20px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.nav-button:hover {
+  background: #f0f5ed;
+  color: #286b50;
+}
+
+.nav-button.active {
+  background: #e8f1e9;
+  color: #286b50;
+}
+
+/* ========================================
+   CONTAINER
 ======================================== */
 
 .container {
@@ -665,6 +804,10 @@ onMounted(async () => {
   margin: 0 auto;
   padding: 0 32px 80px;
 }
+
+/* ========================================
+   HERO
+======================================== */
 
 .hero {
   padding: 65px 0 55px;
@@ -749,47 +892,6 @@ onMounted(async () => {
 }
 
 /* ========================================
-   RESPONSIVE DESIGN
-======================================== */
-
-@media (max-width: 900px) {
-  .content-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 600px) {
-  .topbar-inner {
-    padding: 16px 20px;
-  }
-
-  .topbar-label {
-    display: none;
-  }
-
-  .container {
-    padding: 0 20px 50px;
-  }
-
-  .hero {
-    padding: 45px 0;
-  }
-
-  .hero h1 {
-    letter-spacing: -1px;
-  }
-
-  .list-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .restaurant-grid {
-    grid-template-columns: 1fr;
-  }
-}
-
-/* ========================================
    LOGIN UND REGISTRIERUNG
 ======================================== */
 
@@ -836,34 +938,15 @@ onMounted(async () => {
   box-shadow: 0 12px 35px rgba(25, 50, 35, 0.05);
 }
 
-.user-menu {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.logout-button {
-  border: 1px solid var(--color-border);
-  background: transparent;
-  padding: 10px 16px;
-  border-radius: 10px;
-  color: var(--color-text);
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.logout-button:hover {
-  background: #e8f0e8;
-}
-
-.logout-button:disabled {
-  opacity: 0.5;
-  cursor: wait;
-}
+/* ========================================
+   RESPONSIVE DESIGN
+======================================== */
 
 @media (max-width: 900px) {
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
   .auth-page {
     grid-template-columns: 1fr;
     gap: 35px;
@@ -873,6 +956,45 @@ onMounted(async () => {
 }
 
 @media (max-width: 600px) {
+  .topbar-inner {
+    padding: 16px 20px;
+  }
+
+  .topbar-label {
+    display: none;
+  }
+
+  .navigation-inner {
+    padding: 10px 20px;
+    gap: 8px;
+  }
+
+  .nav-button {
+    padding: 11px 13px;
+    font-size: 13px;
+  }
+
+  .container {
+    padding: 0 20px 50px;
+  }
+
+  .hero {
+    padding: 45px 0;
+  }
+
+  .hero h1 {
+    letter-spacing: -1px;
+  }
+
+  .list-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .restaurant-grid {
+    grid-template-columns: 1fr;
+  }
+
   .auth-page {
     padding: 35px 0;
   }
@@ -893,5 +1015,4 @@ onMounted(async () => {
     padding: 8px 12px;
   }
 }
-
 </style>

@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { kv } from './db.ts'
 import { authRoutes } from './routes/auth.ts'
 import { getAuthenticatedUser } from './services/session.ts'
+import { groupRoutes } from './routes/groups.ts'
 
 const app = new Hono()
 
@@ -16,6 +17,7 @@ app.use('/api/*', cors({
 
 // AUTHENTIFIZIERUNG
 app.route('/api/auth', authRoutes)
+app.route('/api/groups', groupRoutes)
 
 // Alle Restaurant- und Besuchsrouten schützen
 app.use('/api/restaurants', requireAuth)
