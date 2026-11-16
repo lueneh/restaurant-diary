@@ -214,7 +214,6 @@ groupRoutes.get('/:id/members', async (c) => {
   return c.json(members)
 })
 
-
 type SharedRestaurant = {
   id: string
   name: string
@@ -235,17 +234,44 @@ type SharedVisit = {
   note: string
 }
 
+type GroupVisit = SharedVisit & {
+  ownerId: string
+  ownerUsername: string
+}
+
 type GroupRestaurant = SharedRestaurant & {
   ownerId: string
   ownerUsername: string
-  visits: SharedVisit[]
+  contributors: {
+    id: string
+    username: string
+  }[]
+  visits: GroupVisit[]
   visitCount: number
   averageRating: number | null
 }
 
+// Schreibweisen vereinheitlichen
+function normalize(value: string | undefined): string {
+  return (value ?? '')
+    .normalize('NFKC')
+    .trim()
+    .toLocaleLowerCase('de')
+    .replace(/\s+/g, ' ')
+}
+
+// Restaurant anhand von Name, Stadt und Adresse erkennen
+function restaurantKey(restaurant: SharedRestaurant): string {
+  return JSON.stringify([
+    normalize(restaurant.name),
+    normalize(restaurant.location),
+    normalize(restaurant.address)
+  ])
+}
+
 // Restaurants und Bewertungen aller Gruppenmitglieder
 groupRoutes.get('/:id/restaurants', async (c) => {
-  const user = await getAuthenticatedUser(c)
+  const user = await currentUser(c)
 
   if (!user) {
     return c.json({ error: 'Nicht angemeldet' }, 401)
@@ -253,15 +279,13 @@ groupRoutes.get('/:id/restaurants', async (c) => {
 
   const groupId = c.req.param('id')
 
-  // Prüfen, ob die Gruppe existiert
-  const group = await kv.get(['groups', groupId])
+  const group = await kv.get<Group>(['groups', groupId])
 
   if (!group.value) {
     return c.json({ error: 'Gruppe nicht gefunden' }, 404)
   }
 
-  // Nur Mitglieder dürfen die gemeinsamen Daten sehen
-  const membership = await kv.get([
+  const membership = await kv.get<GroupMember>([
     'groupMembers',
     groupId,
     user.id
@@ -269,21 +293,20 @@ groupRoutes.get('/:id/restaurants', async (c) => {
 
   if (!membership.value) {
     return c.json({
-      error: 'Du bist kein Mitglied dieser Gruppe.'
+      error: 'Kein Zugriff auf diese Gruppe.'
     }, 403)
   }
 
-  const result: GroupRestaurant[] = []
+  // Pro eindeutigem Restaurant nur ein Gruppeneintrag
+  const restaurantMap = new Map<string, GroupRestaurant>()
 
-  // Alle Mitglieder der Gruppe durchgehen
   for await (
-    const memberEntry of kv.list<{ userId: string }>({
+    const memberEntry of kv.list<GroupMember>({
       prefix: ['groupMembers', groupId]
     })
   ) {
     const memberId = memberEntry.value.userId
 
-    // Benutzername laden
     const member = await kv.get<{
       id: string
       username: string
@@ -291,49 +314,93 @@ groupRoutes.get('/:id/restaurants', async (c) => {
 
     if (!member.value) continue
 
-    // Persönliche Restaurants dieses Mitglieds laden
+    const username = member.value.username
+
     for await (
       const restaurantEntry of kv.list<SharedRestaurant>({
         prefix: ['restaurants', memberId]
       })
     ) {
       const restaurant = restaurantEntry.value
-      const visits: SharedVisit[] = []
+      const key = restaurantKey(restaurant)
 
-      // Alle Besuche des Restaurants laden
-      for await (
-        const visitEntry of kv.list<SharedVisit>({
-          prefix: [
-            'visits',
-            memberId,
-            restaurant.id
-          ]
-        })
-      ) {
-        visits.push(visitEntry.value)
+      let groupedRestaurant = restaurantMap.get(key)
+
+      // Restaurant zum ersten Mal gefunden
+      if (!groupedRestaurant) {
+        groupedRestaurant = {
+          ...restaurant,
+          ownerId: memberId,
+          ownerUsername: username,
+          contributors: [],
+          visits: [],
+          visitCount: 0,
+          averageRating: null
+        }
+
+        restaurantMap.set(key, groupedRestaurant)
       }
 
-      visits.sort((a, b) => b.date.localeCompare(a.date))
+      // Mitglied als Beitragenden hinzufügen
+      if (
+        !groupedRestaurant.contributors.some(
+          contributor => contributor.id === memberId
+        )
+      ) {
+        groupedRestaurant.contributors.push({
+          id: memberId,
+          username
+        })
+      }
 
-      const averageRating = visits.length > 0
-        ? Math.round(
-            (
-              visits.reduce(
-                (sum, visit) => sum + visit.rating,
-                0
-              ) / visits.length
-            ) * 10
-          ) / 10
-        : null
+      // Fehlende Anzeigeinformationen ergänzen
+      if (!groupedRestaurant.address && restaurant.address) {
+        groupedRestaurant.address = restaurant.address
+      }
 
-      result.push({
-        ...restaurant,
-        ownerId: memberId,
-        ownerUsername: member.value.username,
-        visits,
-        visitCount: visits.length,
-        averageRating
-      })
+      if (!groupedRestaurant.cuisine && restaurant.cuisine) {
+        groupedRestaurant.cuisine = restaurant.cuisine
+      }
+
+      // Besuche dieses Mitglieds hinzufügen
+      for await (
+        const visitEntry of kv.list<SharedVisit>({
+          prefix: ['visits', memberId, restaurant.id]
+        })
+      ) {
+        groupedRestaurant.visits.push({
+          ...visitEntry.value,
+          ownerId: memberId,
+          ownerUsername: username
+        })
+      }
+    }
+  }
+
+  const result = Array.from(restaurantMap.values())
+
+  // Gemeinsame Statistiken berechnen
+  for (const restaurant of result) {
+    restaurant.visits.sort((a, b) =>
+      b.date.localeCompare(a.date)
+    )
+
+    restaurant.contributors.sort((a, b) =>
+      a.username.localeCompare(b.username, 'de')
+    )
+
+    restaurant.visitCount = restaurant.visits.length
+
+    if (restaurant.visits.length > 0) {
+      const sum = restaurant.visits.reduce(
+        (total, visit) => total + visit.rating,
+        0
+      )
+
+      restaurant.averageRating =
+        Math.round(
+          (sum / restaurant.visits.length) * 10
+        ) / 10
     }
   }
 
