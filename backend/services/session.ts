@@ -33,6 +33,7 @@ export async function getAuthenticatedUser(
     return null
   }
 
+  // Das Cookie enthält das ursprüngliche Token, der KV-Eintrag ist über dessen Hash adressiert.
   const tokenHash = await hashSessionToken(token)
 
   const sessionEntry = await kv.get<Session>([

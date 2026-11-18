@@ -3,6 +3,7 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
+  // Der Entwicklungsserver leitet API-Anfragen lokal an das Deno-Backend weiter.
   server: {
     proxy: {
       '/api': {

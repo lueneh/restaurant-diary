@@ -73,6 +73,7 @@ async function handleRegister(username: string, password: string) {
 
   try {
     await register(username, password)
+    // Die Registrierung legt das Konto an. Der anschließende Login eröffnet die Sitzung.
     await handleLogin(username, password)
   } catch (err) {
     authError.value = err instanceof Error
@@ -94,6 +95,7 @@ async function handleLogout() {
     authMode.value = 'login'
     activePage.value = 'restaurants'
 
+    // Beim Abmelden auch die zuvor geladenen persönlichen Daten und Formularzustände leeren.
     closeRestaurant()
     resetRestaurantForm()
     restaurantFormKey.value++
@@ -123,6 +125,7 @@ const {
 } = useRestaurants()
 
 const editingId = ref<string | null>(null)
+// Ein neuer Schlüssel erzeugt das Formular neu und setzt damit auch seine lokalen Eingabefelder zurück.
 const restaurantFormKey = ref(0)
 
 const editingRestaurant = computed<RestaurantInput | null>(() => {
@@ -199,6 +202,7 @@ const searchQuery = ref('')
 const selectedCuisine = ref('')
 const sortOrder = ref('az')
 
+// Die Filteroptionen aus der aktuellen Restaurantliste ableiten und Duplikate entfernen.
 const availableCuisines = computed(() => {
   const cuisines = restaurants.value
     .map((restaurant) => restaurant.cuisine.trim())
@@ -207,6 +211,7 @@ const availableCuisines = computed(() => {
   return [...new Set(cuisines)]
 })
 
+// Name und Ort durchsuchen, nach Küche filtern und das Ergebnis für die Anzeige sortieren.
 const filteredRestaurants = computed(() => {
   const query = searchQuery.value.trim().toLocaleLowerCase('de')
 
@@ -250,6 +255,7 @@ type RatingSummary = {
 const restaurantRatings = ref<Record<string, RatingSummary>>({})
 
 async function loadRestaurantRatings() {
+  // Besuche parallel laden und verfügbare Bewertungen auch bei einzelnen fehlgeschlagenen Anfragen anzeigen.
   const results = await Promise.allSettled(
     restaurants.value.map(async (restaurant) => {
       const restaurantVisits = await getVisits(restaurant.id)
@@ -318,6 +324,7 @@ const editingVisit = computed<VisitInput | null>(() => {
 
   if (!visit) return null
 
+  // Ältere Besuche können nur eine Gesamtbewertung haben. Sie dient dann als Vorgabe für fehlende Einzelbewertungen.
   const oldRating = Math.max(
     1,
     Math.min(5, Math.round(visit.rating))
@@ -369,6 +376,7 @@ async function saveVisit(data: VisitInput) {
     editingVisitId.value
   )
 
+  // Das Formular nur zurücksetzen, wenn beim Speichern noch dieselbe Restaurantansicht geöffnet ist.
   if (
     saved &&
     selectedRestaurant.value?.id === restaurantId
@@ -419,6 +427,7 @@ function navigateTo(page: 'restaurants' | 'groups') {
 // INITIALISIERUNG
 // ========================================
 
+// Beim Start anhand des Sitzungscookies prüfen, ob die persönlichen Daten geladen werden können.
 onMounted(async () => {
   try {
     currentUser.value = await getCurrentUser()

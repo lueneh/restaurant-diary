@@ -18,6 +18,7 @@ export type Visit = {
   note: string
 }
 
+// Die Eingabetypen enthalten die Formularwerte. IDs und berechnete Bewertungen kommen vom Backend.
 export type RestaurantInput = {
   name: string
   location: string

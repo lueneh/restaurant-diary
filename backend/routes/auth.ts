@@ -139,6 +139,7 @@ authRoutes.post('/register', async (c) => {
   }
 
   // Benutzer und eindeutigen Namen atomar speichern
+  // Die Prüfung im selben Schreibvorgang verhindert, dass parallele Registrierungen denselben Namen belegen.
   const result = await kv.atomic()
     .check(existing)
     .set(['users', user.id], user)

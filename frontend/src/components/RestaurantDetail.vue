@@ -52,6 +52,7 @@ watch(
   async (id) => {
     if (!id) return
 
+    // Auf die Aktualisierung des Formulars warten, bevor zur Bearbeitungsposition gescrollt wird.
     await nextTick()
 
     visitFormElement.value?.scrollIntoView({

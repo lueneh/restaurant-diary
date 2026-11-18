@@ -15,6 +15,7 @@ const emit = defineEmits<{
   (e: 'cancel'): void
 }>()
 
+// Das Datum für das Eingabefeld aus der lokalen Zeit bilden, damit ein UTC-Tageswechsel den Standardwert nicht verschiebt.
 function todayLocal(): string {
   const now = new Date()
   const year = now.getFullYear()

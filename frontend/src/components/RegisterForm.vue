@@ -16,6 +16,7 @@ const password = ref('')
 const confirmPassword = ref('')
 const validationError = ref('')
 
+// Die Passwortbestätigung lokal prüfen, bevor App.vue die Registrierung anstößt.
 function submit() {
   validationError.value = ''
 

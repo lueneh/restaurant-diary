@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
+// Die benannten v-model-Bindungen halten die Eingaben mit dem Filterzustand in App.vue synchron.
 const search = defineModel<string>('search', {
   default: ''
 })
@@ -17,6 +18,7 @@ const props = defineProps<{
   cuisines: string[]
 }>()
 
+// Für die Auswahlliste eine sortierte Kopie erzeugen, damit die übergebene Liste unverändert bleibt.
 const cuisineOptions = computed(() =>
   [...props.cuisines].sort((a, b) =>
     a.localeCompare(b, 'de')

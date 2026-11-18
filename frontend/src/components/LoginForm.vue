@@ -14,6 +14,7 @@ const emit = defineEmits<{
 const username = ref('')
 const password = ref('')
 
+// Die Eingaben an App.vue übergeben. Dort werden die Anfrage und der Sitzungszustand verwaltet.
 function submit() {
   if (!username.value.trim() || !password.value) return
 

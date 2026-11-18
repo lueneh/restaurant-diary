@@ -23,6 +23,7 @@ app.route('/api/groups', groupRoutes)
 app.use('/api/restaurants', requireAuth)
 app.use('/api/restaurants/*', requireAuth)
 
+// Die Middleware stellt den ermittelten Benutzer für die nachfolgenden Restaurant- und Besuchsrouten bereit.
 async function requireAuth(
   c: Parameters<typeof getAuthenticatedUser>[0],
   next: () => Promise<void>
@@ -78,6 +79,7 @@ function isValidRating(value: unknown): value is number {
   )
 }
 
+// Die Gesamtbewertung serverseitig aus den vier Einzelwerten ableiten und auf eine Nachkommastelle runden.
 function calculateRating(data: VisitInput): number {
   const average = (
     data.foodRating +
@@ -93,6 +95,7 @@ function isValidDate(value: unknown): value is string {
   if (typeof value !== 'string') return false
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
 
+  // Der Vergleich mit dem ISO-Datum erkennt auch Eingaben, die beim Parsen auf einen anderen Tag fallen.
   const timestamp = Date.parse(value)
 
   return (
@@ -195,6 +198,7 @@ app.get('/api/health', (c) => {
 
 // RESTAURANTS ABRUFEN
 
+// Das Präfix mit der Benutzer-ID begrenzt die Liste auf die Restaurants des eigenen Kontos.
 app.get('/api/restaurants', async (c) => {
   const user = (await getAuthenticatedUser(c))!
   const restaurants: Restaurant[] = []
@@ -264,6 +268,7 @@ app.put('/api/restaurants/:id', async (c) => {
 
 // RESTAURANT LÖSCHEN
 
+// Beim Löschen eines Restaurants auch die zugehörigen Besuche entfernen.
 app.delete('/api/restaurants/:id', async (c) => {
   const user = (await getAuthenticatedUser(c))!
   const id = c.req.param('id')

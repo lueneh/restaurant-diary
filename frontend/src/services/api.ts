@@ -181,6 +181,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
     credentials: 'include'
   })
 
+  // Eine fehlende oder abgelaufene Sitzung wird beim Start als abgemeldeter Zustand behandelt.
   if (response.status === 401) {
     return null
   }

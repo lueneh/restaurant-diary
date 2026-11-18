@@ -114,6 +114,7 @@ groupRoutes.post('/', async (c) => {
     joinedAt: createdAt
   }
 
+  // Die Mitgliedschaft in beiden Richtungen speichern, damit Gruppen pro Nutzer und Mitglieder pro Gruppe abrufbar sind.
   const saved = await kv.atomic()
     .set(['groups', groupId], group)
     .set(['groupMembers', groupId, user.id], member)
@@ -168,6 +169,7 @@ groupRoutes.post('/join', async (c) => {
   }
 
   const result = await kv.atomic()
+    // Auch bei gleichzeitigen Anfragen darf der Beitritt nur einmal gespeichert werden.
     .check({ key: membershipKey, versionstamp: null })
     .set(membershipKey, member)
     .set(['groupMemberships', user.id, groupId], member)
@@ -298,6 +300,7 @@ groupRoutes.get('/:id/restaurants', async (c) => {
   }
 
   // Pro eindeutigem Restaurant nur ein Gruppeneintrag
+  // Die Gruppenansicht wird beim Abruf aus den persönlichen Listen der Mitglieder zusammengesetzt.
   const restaurantMap = new Map<string, GroupRestaurant>()
 
   for await (

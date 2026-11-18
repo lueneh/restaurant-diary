@@ -61,6 +61,7 @@ const success = ref('')
 
 const expandedRestaurants = ref<string[]>([])
 
+// Die Gruppen-API verwendet das Sitzungscookie zur Zuordnung der Anfrage zum angemeldeten Konto.
 async function request<T>(
   path: string,
   options: RequestInit = {}
@@ -160,6 +161,7 @@ async function joinGroup() {
   }
 }
 
+// Beim Wechsel die Daten, Suche und aufgeklappten Karten der vorherigen Gruppe zurücksetzen.
 async function openGroup(group: Group) {
   selectedGroup.value = group
   members.value = []
@@ -223,6 +225,7 @@ function toggleRestaurant(key: string) {
   }
 }
 
+// Für Anzeige und Aufklappzustand den Besitzer des zusammengefassten Eintrags mit seiner Restaurant-ID kombinieren.
 function restaurantKey(restaurant: GroupRestaurant): string {
   return `${restaurant.ownerId}:${restaurant.id}`
 }

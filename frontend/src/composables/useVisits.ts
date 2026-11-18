@@ -12,6 +12,7 @@ import {
   deleteVisit
 } from '../services/api'
 
+// Verwaltet die Besuchsliste und die Änderungen für das jeweils ausgewählte Restaurant.
 export function useVisits() {
   const visits = ref<Visit[]>([])
   const visitError = ref('')

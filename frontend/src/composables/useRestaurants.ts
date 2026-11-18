@@ -12,6 +12,7 @@ import {
   deleteRestaurant
 } from '../services/api'
 
+// Bündelt die Restaurantliste, die API-Aufrufe und den Zustand für Speicherung und Fehler.
 export function useRestaurants() {
   const restaurants = ref<Restaurant[]>([])
   const error = ref('')
